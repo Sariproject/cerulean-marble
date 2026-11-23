@@ -637,6 +637,10 @@ async function download(){
   ws.columns.forEach((c,i)=>c.width=[8,13,10,11,16][i]||7.5);
   const pg=(w,h)=>{w.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.2,footer:0.2}};w.headerFooter={oddFooter:'&Cעמוד &P מתוך &N'};w.views=[{rightToLeft:true,state:'frozen',ySplit:1}];w.getRow(1).height=h;w.pageSetup.printTitlesRow='1:1'};
   pg(ws,48);
+  {const bd={style:'thin',color:{argb:'FF000000'}},B={top:bd,left:bd,bottom:bd,right:bd};
+   ws.eachRow((row,rn)=>row.eachCell({includeEmpty:true},(c,cn)=>{c.border=B;
+     if(rn===1){c.font={bold:true,color:{argb:'FF8B0000'},size:11};c.alignment={horizontal:'center',vertical:'middle',wrapText:true}}
+     else{c.alignment={vertical:'middle',horizontal:cn<=5?'right':'center',wrapText:cn===5};if(cn>5&&cn!==8&&cn!==10&&cn!==20&&cn!==21)c.numFmt='0.0'}}))}
   const wd=wb.addWorksheet('פירוט יומי',{views:[{rightToLeft:true}]});
   wd.addRow(['מספר עובד','שם','תאריך','יום','סוג יום','תקן','שעות בפועל','מעל התקן (100%)','חוסר','העדרות',...HOUR_TARGETS,'חישוב']).font={bold:true};
   R.detail.forEach(d=>wd.addRow([d.emp,d.name,fmt(d.date),WD[wdOf(d.date)],d.typ,d.std||'',rnd(d.total,2)||'',rnd(d.over,2)||'',rnd(d.def,2)||'',d.abs,...HOUR_TARGETS.map(t=>rnd(d.h[t]||0,2)||''),d.calc]));
