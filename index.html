@@ -1,4 +1,3 @@
-<!-- v2 -->
 <title>סיכום שכר חודשי</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700&display=swap">
@@ -636,13 +635,16 @@ async function download(){
     ws.addRow(v);
   });
   ws.columns.forEach((c,i)=>c.width=i<5?16:13);
+  const pg=(w,h)=>{w.pageSetup={paperSize:9,orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,horizontalCentered:true,margins:{left:0.3,right:0.3,top:0.5,bottom:0.5,header:0.2,footer:0.2}};w.headerFooter={oddFooter:'&Cעמוד &P מתוך &N'};w.views=[{rightToLeft:true,state:'frozen',ySplit:1}];w.getRow(1).height=h;w.pageSetup.printTitlesRow='1:1'};
+  pg(ws,32);
   const wd=wb.addWorksheet('פירוט יומי',{views:[{rightToLeft:true}]});
   wd.addRow(['מספר עובד','שם','תאריך','יום','סוג יום','תקן','שעות בפועל','מעל התקן (100%)','חוסר','העדרות',...HOUR_TARGETS,'חישוב']).font={bold:true};
   R.detail.forEach(d=>wd.addRow([d.emp,d.name,fmt(d.date),WD[wdOf(d.date)],d.typ,d.std||'',rnd(d.total,2)||'',rnd(d.over,2)||'',rnd(d.def,2)||'',d.abs,...HOUR_TARGETS.map(t=>rnd(d.h[t]||0,2)||''),d.calc]));
-  wd.columns.forEach(c=>c.width=14);wd.getColumn(HOUR_TARGETS.length+11).width=70;
+  wd.columns.forEach(c=>c.width=14);pg(wd,32);wd.getColumn(HOUR_TARGETS.length+11).width=70;
   const ww=wb.addWorksheet('אזהרות',{views:[{rightToLeft:true}]});
   ww.addRow(['נושא','הודעה']).font={bold:true};
   (R.warnings.length?R.warnings:[{kind:'-',msg:'אין אזהרות'}]).forEach(w=>ww.addRow([w.kind,w.msg]));
+  pg(ww,20);
   ww.getColumn(1).width=12;ww.getColumn(2).width=110;
   const buf=await wb.xlsx.writeBuffer();
   const fname='סיכום_'+R.end.slice(5,7)+'-'+R.end.slice(0,4)+'.xlsx';
