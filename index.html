@@ -319,6 +319,8 @@ function compute(){
         const k=r.date;if(!hol.has(k)){hol.add(k);warnings.push({kind:'לוח',msg:`בדוח מופיע "${r.texts.filter(t=>holRe.test(t)).join(' ')}" בתאריך ${fmtShort(r.date)} אבל סוג היום בלוח הוא "${typ}"`})}
       }
       const b={reg:r.reg,ot1:r.ot1,ot2:r.ot2,ot3:r.ot3,fri:r.fri,sat:r.sat};
+      {let ex=Object.values(b).reduce((a,x)=>a+x,0)-r.total;
+       if(ex>0.004){for(const k of ['reg','ot1','ot2','ot3']){const c=Math.min(b[k],ex);b[k]-=c;ex-=c;if(ex<=0.004)break}}}
       b.rest=Math.max(0,r.total-Object.values(b).reduce((a,x)=>a+x,0));
       const row={emp:e.number,name:e.name,date:r.date,typ,total:r.total,h:{},abs:''};
       for(const k in b){if(b[k]<=0)continue;const t=ov||def.map[k];if(t&&t!==IGNORE&&!(S.rules.attAll&&t===ATT)){res.hours[t]=(res.hours[t]||0)+b[k];row.h[t]=(row.h[t]||0)+b[k]}}
