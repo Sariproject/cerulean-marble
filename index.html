@@ -157,7 +157,7 @@ function defaultSettings(){
       {name:'חול המועד',quota:true,att:true,map:m('שעות עבודה נוכחות','ש.נ 100%','ש.נ 125%','ש.נ 150%',null,null,'ש.נ 100%')},
       {name:'יום זיכרון',quota:false,att:false,map:all('ש.נ 175%')},
       {name:'יום העצמאות',quota:false,att:false,map:all('ש.נ 175%')}],
-    calendar:{}, employees:{},
+    calendar:{}, employees:{}, fri:{},
     abs:[{kind:'קוד',val:'2',target:'ימי חופשה'},{kind:'טקסט',val:'חופשה',target:'ימי חופשה'},{kind:'טקסט',val:'מחלה',target:'ימי מחלה'}],
     ver:6,general:{hpd:4,round:2,shift20:true,half:true,halfMin:10,fullMin:35},
     rules:{attAll:true,special:{on:true,high:'ש.נ 175%',low:'75%'},notes:{}}
@@ -165,7 +165,7 @@ function defaultSettings(){
 }
 let S=defaultSettings();
 try{const raw=localStorage.getItem(KEY); if(raw){const p=JSON.parse(raw); if(p&&p.dayTypes){S=Object.assign(defaultSettings(),p);S.ver=p.ver||0}}}catch(e){}
-S.general=Object.assign({half:true,halfMin:10,fullMin:35},S.general);if(S.general.ver_r!==2){S.general.halfMin=10;S.general.fullMin=35;S.general.ver_r=2}S.rules=Object.assign({attAll:true,notes:{}},S.rules||{});S.rules.special=Object.assign({on:true,high:'ש.נ 175%',low:'75%'},S.rules.special||{});S.rules.notes=S.rules.notes||{};
+S.general=Object.assign({half:true,halfMin:10,fullMin:35},S.general);if(S.general.ver_r!==2){S.general.halfMin=10;S.general.fullMin=35;S.general.ver_r=2}S.rules=Object.assign({attAll:true,notes:{}},S.rules||{});S.rules.special=Object.assign({on:true,high:'ש.נ 175%',low:'75%'},S.rules.special||{});S.rules.notes=S.rules.notes||{};S.fri=S.fri||{};
 if((S.ver||0)<5){const t=S.dayTypes.find(x=>x.name==='רגיל');if(t){t.map.ot1='ש.נ 100%';t.map.ot2='ש.נ 125%';t.map.ot3='ש.נ 150%';t.map.rest='ש.נ 100%'}S.ver=5}
 if((S.ver||0)<6){const mk=(n,q,a,src)=>{if(!S.dayTypes.some(x=>x.name===n)){const b=S.dayTypes.find(x=>x.name===src)||S.dayTypes[0];S.dayTypes.push({name:n,quota:q,att:a,map:Object.assign({},b.map)})}};mk('חול המועד',true,true,'רגיל');mk('יום זיכרון',false,false,'חג');mk('יום העצמאות',false,false,'חג');S.ver=6;try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
@@ -249,6 +249,8 @@ function parseReport(rows,fname){
   const ix={std:c('תקן'),name:c('שםהעובד'),num:c('מספרעובד'),absn:c('סוגהעדרות'),deficit:c(["ש'חוסר",'שחוסר']),sat:c('שעותשבת'),fri:c('שעותשישי'),
     ot3:c('נוספות3'),ot2:c('נוספות2'),ot1:c('נוספות1'),reg:c('שעותרגילות'),total:c('סהכשעות'),day:c('היום')};
   const tx=['יציאה2','כניסה2','יציאה1','כניסה1'].map(c).filter(x=>x!=null);
+  const tc={ex2:c('יציאה2'),en2:c('כניסה2'),ex1:c('יציאה1'),en1:c('כניסה1')};
+  const tv=(r,k)=>tc[k]!=null&&r[tc[k]]!=null?String(r[tc[k]]).trim():'';
   const g=(r,k)=>ix[k]!=null?r[ix[k]]:null;
   const emps=[];let cur=null;
   for(const r of rows.slice(hi+1)){
@@ -262,10 +264,12 @@ function parseReport(rows,fname){
     if(!cur)throw new Error('שורת יום לפני שורת עובד');
     cur.days.push({date:d,std:num(g(r,'std')),absCode:Math.round(num(g(r,'absn'))),deficit:num(g(r,'deficit')),sat:num(g(r,'sat')),fri:num(g(r,'fri')),
       ot3:num(g(r,'ot3')),ot2:num(g(r,'ot2')),ot1:num(g(r,'ot1')),reg:num(g(r,'reg')),total:num(g(r,'total')),
+      times:{en1:tv(r,'en1'),en2:tv(r,'en2'),ex1:tv(r,'ex1'),ex2:tv(r,'ex2')},
       texts:tx.map(j=>r[j]).filter(v=>v!=null&&String(v).trim()!=='').map(v=>String(v).trim())});
   }
   return emps;
 }
+let FROPEN=false;
 let REPORTS=[];   // {file, emps}
 let PREV=[];      // דוחות תקופה קודמת, לרצף בלבד
 let ERRORS=[];
@@ -279,16 +283,16 @@ function compute(){
   const warnings=[...ERRORS];
   let start='9999',end='0000';
   emps.forEach(e=>e.days.forEach(d=>{if(d.date<start)start=d.date;if(d.date>end)end=d.date}));
-  let quota=0;const missing=[];
+  let quota=0;const missing=[],qDates=[];
   for(let d=start;d<=end;d=addDays(d,1)){
     let t=S.calendar[d]&&S.calendar[d].type;
     if(!t){t=autoType(d).type;missing.push(d)}
     const def=S.dayTypes.find(x=>x.name===t);
     if(!def)warnings.push({kind:'לוח',msg:`סוג היום "${t}" (${fmt(d)}) לא מוגדר בלשונית סוגי יום`});
-    else if(def.quota)quota++;
+    else if(def.quota){quota++;qDates.push(d)}
   }
   if(missing.length)warnings.push({kind:'לוח',msg:`${missing.length} תאריכים בתקופה לא אושרו בלוח החודשי. נעשה שימוש בברירת מחדל לפי יום בשבוע וחגים. בדקו בלשונית "לוח חודשי".`,fix:true});
-  const results=[],detail=[],seen={};
+  const results=[],detail=[],seen={},friList=[];
   const holRe=/ר"ה|חג|כיפ|סוכות|פסח|שבועות|שמיני|חול המוע/;
   const hol=new Set();
   for(const e of emps){
@@ -297,17 +301,50 @@ function compute(){
     let info=S.employees[e.number];
     if(!info){const p=e.name.split(' ');info=S.employees[e.number]={family:p.length>1?p.slice(1).join(' '):'',first:p[0],extra:'',dept:'',hpd:'',quotaOverride:''};save()}
     const hpd=info.hpd!==''&&info.hpd!=null?+info.hpd:+S.general.hpd;
-    const qd=info.quotaOverride!==''&&info.quotaOverride!=null?+info.quotaOverride:quota;
+    const off=info.off!==''&&info.off!=null?+info.off:null;
+    const qd=info.quotaOverride!==''&&info.quotaOverride!=null?+info.quotaOverride:(off==null?quota:qDates.filter(x=>wdOf(x)!==off).length);
     const res={number:e.number,name:e.name,hours:{},att:0,deficit:0,abs:{},quota:qd,hpd};
-    const ds=e.days.map(d=>d.date);
+    const mmHM=m=>String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+    const isTime=v=>v!=null&&/^\D*\d{1,2}:\d{2}\D*$/.test(String(v));
+    const tmin=v=>{const m=String(v).match(/(\d{1,2}):(\d{2})/);return(+m[1])*60+(+m[2])};
+    const FR=(S.fri&&S.fri[e.number])||{};
+    const days=e.days.map(d=>{
+      const typ0=effType(d.date),def0=S.dayTypes.find(x=>x.name===typ0),T=d.times||{};
+      const raw=[T.en1,T.en2,T.ex1,T.ex2];
+      const bad=raw.some(v=>v&&!isTime(v));
+      let out=d;
+      if(!bad&&!d.absCode){
+        const en=[T.en1,T.en2].filter(isTime).map(tmin),ex=[T.ex1,T.ex2].filter(isTime).map(tmin);
+        let a=null,z=null,why='';
+        if(en.length&&ex.length&&en.length!==ex.length){a=Math.min(...en);z=Math.max(...ex);why='כניסות ויציאות לא תואמות: הכניסה המוקדמת והיציאה המאוחרת'}
+        else if(en.length>=2&&!ex.length){a=Math.min(...en);z=Math.max(...en);why='שתי כניסות בלי יציאה: הכניסה השנייה נלקחה כיציאה'}
+        else if(ex.length>=2&&!en.length){a=Math.min(...ex);z=Math.max(...ex);why='שתי יציאות בלי כניסה'}
+        else if(en.length===1&&ex.length===1&&d.total<=0.004){a=en[0];z=ex[0];why='יש כניסה ויציאה אבל 0 שעות בדוח'}
+        if(a!=null){let m=z-a;if(m<0)m+=1440;const dur=m/60;
+          if(dur>0.004&&dur<24){
+            const wd=wdOf(d.date),std=d.std,b={reg:0,ot1:0,ot2:0,ot3:0,fri:0,sat:0};
+            if(def0&&def0.att){b.reg=Math.min(dur,std);b.ot1=Math.max(0,dur-std)}else if(wd===5)b.fri=dur;else if(wd===6)b.sat=dur;else b.reg=dur;
+            const note='תוקן: כניסה '+mmHM(a)+', יציאה '+mmHM(z);
+            out=Object.assign({},d,b,{total:dur,deficit:def0&&def0.att?Math.max(0,std-dur):0,fixNote:note});
+            warnings.push({kind:'תיקון שעות',msg:`${e.name}, ${fmtShort(d.date)}: ${why}. ${note} = ${rnd(dur,2)} שעות (בדוח היה ${rnd(d.total,2)}).`})}}
+      }
+      if(wdOf(d.date)===5&&out.total<=0.004&&!out.absCode){
+        friList.push({emp:e.number,name:e.name,date:d.date});
+        const fr=FR[d.date];
+        if(fr&&+fr.dur>0){const dur=+fr.dur;
+          out=Object.assign({},out,{reg:0,ot1:0,ot2:0,ot3:0,sat:0,fri:dur,total:dur,deficit:0,fixNote:'מילוי שישי: '+(fr.entry?'כניסה '+fr.entry+', ':'')+dur+' שעות'});
+          warnings.push({kind:'מילוי שישי',msg:`${e.name}, ${fmtShort(d.date)}: נוספו ${dur} שעות ${fr.entry?'משעת כניסה '+fr.entry:''}`})}
+      }
+      return out});
+    const ds=days.map(d=>d.date);
     if(Math.min(...ds.map(x=>+x.replace(/-/g,'')))!==+start.replace(/-/g,'')||Math.max(...ds.map(x=>+x.replace(/-/g,'')))!==+end.replace(/-/g,''))
       warnings.push({kind:'קבצים',msg:`תקופת הדוח של ${e.name} שונה משאר העובדים`});
-    const byDate={};e.days.forEach(d=>byDate[d.date]=d);
+    const byDate={};days.forEach(d=>byDate[d.date]=d);
     PREV.flatMap(q=>q.emps).filter(x=>x.number===e.number).forEach(pe=>pe.days.forEach(d=>{if(!byDate[d.date])byDate[d.date]=d}));
     const ATT='שעות עבודה נוכחות',SP=S.rules.special,paid={};
     Object.values(byDate).filter(d=>d.date<start).sort((a,b)=>a.date<b.date?-1:1).forEach(d=>{const t=effType(d.date);
       if(CHAIN.includes(t)&&d.total>0){const pv=byDate[addDays(d.date,-1)];if(pv&&pv.total>0&&(['שישי','ערב חג'].includes(effType(pv.date))||paid[pv.date]))paid[d.date]=true}});
-    for(const r of e.days.slice().sort((a,b)=>a.date<b.date?-1:1)){
+    for(const r of days.slice().sort((a,b)=>a.date<b.date?-1:1)){
       const typ=effType(r.date),def=S.dayTypes.find(x=>x.name===typ);
       if(!def)continue;
       let ov=null;
@@ -349,14 +386,15 @@ function compute(){
         else if(special)calc='סה"כ '+t2+cols+att;
         else if(std>0)calc='תקן '+std+(over>0.004?' + מעל התקן '+rnd(over,2):'')+(r.deficit>0.004?' − חוסר '+rnd(r.deficit,2):'')+' = סה"כ '+t2+cols+att;
         else calc='אין תקן, הכול מעל התקן: סה"כ '+t2+cols+att;
-        row.calc=calc;
+        row.calc=calc+(r.fixNote?' | '+r.fixNote:'');
       }
       detail.push(row);
     }
     results.push(res);
   }
   results.sort((a,b)=>a.number-b.number);
-  return{results,detail,start,end,warnings};
+  friList.sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.emp-b.emp);
+  return{results,detail,start,end,warnings,friList};
 }
 function outRow(res){
   const i=S.employees[res.number],n=S.general.round,h=t=>(S.general.half?halfRound(res.hours[t]||0):rnd(res.hours[t]||0,n))||'';
@@ -396,6 +434,14 @@ function viewRun(){
    <div class="kpi"><b>${rnd(attTotal,2)}</b><span>סה"כ שעות עבודה נוכחות</span></div>
    <div class="kpi ${nW?'alert':''}"><b>${nW}</b><span>נקודות לבדיקה</span></div></div>`;
   if(nW)h+=`<details class="warns"><summary>נקודות לבדיקה (${nW})</summary>${R.warnings.map(w=>`<div class="w"><b>${esc(w.kind)}:</b> ${esc(w.msg)} ${w.fix?'<button class="btn sec small" data-act="confirmcal">אשר את הלוח כפי שהוא</button>':''}</div>`).join('')}</details>`;
+  if(R.friList.length){const nf=R.friList.filter(x=>{const f=(S.fri[x.emp]||{})[x.date];return f&&+f.dur>0}).length;
+    h+=`<details class="warns" ${FROPEN?'open':''}><summary id="frsum">ימי שישי ללא נתונים (${R.friList.length}${nf?', מולאו '+nf:''})</summary>
+    <p class="muted small">אם העובדת עבדה בשישי ואין נתון בדוח, בחרו משך. השעות יתווספו לשישי (175%), ושעת הכניסה אופציונלית לתיעוד.</p>
+    <div class="scroll"><table><thead><tr><th>עובד</th><th>תאריך</th><th>שעת כניסה</th><th>משך</th></tr></thead><tbody>
+    ${R.friList.map(x=>{const f=(S.fri[x.emp]||{})[x.date]||{};const k=x.emp+'|'+x.date;
+      return`<tr><td>${esc(x.name)}</td><td>${fmt(x.date)}</td><td><input type="time" value="${esc(f.entry||'')}" data-fr="${k}" data-f="entry"></td>
+      <td><select data-fr="${k}" data-f="dur"><option value="">לא עבדה</option><option value="2"${+f.dur===2?' selected':''}>שעתיים</option><option value="2.5"${+f.dur===2.5?' selected':''}>שעתיים וחצי</option></select></td></tr>`}).join('')}
+    </tbody></table></div></details>`}
   const hdr=OUT_HEAD.map(x=>x.replace(/\n/g,' ').trim());
   const groups=[['פרטי עובד',5,'g1'],['קריאות',2,'g2'],['מכסה ונוכחות',5,'g3'],['אחוזי ש.נ',7,'g4'],['העדרויות ומשמרות',3,'g5']];
   const gOf=[];groups.forEach(([n,c,k])=>{for(let i=0;i<c;i++)gOf.push(k)});
@@ -470,10 +516,11 @@ function importEmps(buf){
 }
 function viewEmp(){
   const ks=Object.keys(S.employees).map(Number).sort((a,b)=>a-b);
-  return`<div class="panel"><div><h2>עובדים</h2><p class="muted">עובד חדש מתווסף אוטומטית מהדוח, ואז אפשר להשלים כאן שם משפחה, מחלקה ומ.זהוי נוסף. שעות מכסה ליום ריק = ברירת המחדל (לשונית "העדרויות וכללי"). ימי מכסה ריק = לפי הלוח החודשי.</p></div>
+  return`<div class="panel"><div><h2>עובדים</h2><p class="muted">עובד חדש מתווסף אוטומטית מהדוח, ואז אפשר להשלים כאן שם משפחה, מחלקה ומ.זהוי נוסף. שעות מכסה ליום ריק = ברירת המחדל (לשונית "העדרויות וכללי"). ימי מכסה ריק = לפי הלוח החודשי. יום חופשי קבוע = יום בשבוע שבו העובדת לא עובדת: הוא לא נספר בימי המכסה ובשעות המכסה שלה.</p></div>
   <div class="row"><label class="btn sec" for="empxl">ייבוא עובדים מ-Excel</label><input type="file" id="empxl" accept=".xlsx,.xls,.csv" hidden><span class="muted">קובץ עם עמודות: מספר עובד, שם משפחה, שם פרטי, מ.זהוי נוסף, מחלקה (כמו קובץ הסיכום הקיים). עובדים קיימים יתעדכנו והחדשים יתווספו.</span></div>
-  ${ks.length?`<div class="scroll"><table><thead><tr><th>מספר</th><th>שם משפחה</th><th>שם פרטי</th><th>מ.זהוי נוסף</th><th>מחלקה</th><th>שעות מכסה ליום</th><th>ימי מכסה (דריסה)</th><th></th></tr></thead><tbody>
+  ${ks.length?`<div class="scroll"><table><thead><tr><th>מספר</th><th>שם משפחה</th><th>שם פרטי</th><th>מ.זהוי נוסף</th><th>מחלקה</th><th>יום חופשי קבוע</th><th>שעות מכסה ליום</th><th>ימי מכסה (דריסה)</th><th></th></tr></thead><tbody>
   ${ks.map(k=>{const e=S.employees[k];return`<tr><td>${k}</td>${['family','first','extra','dept'].map(f=>`<td><input type="text" value="${esc(e[f])}" data-ek="${k}" data-f="${f}"></td>`).join('')}
+  <td><select data-ek="${k}" data-f="off"><option value="">ללא</option>${WD.map((w,i)=>`<option value="${i}"${String(e.off)===String(i)?' selected':''}>${w}</option>`).join('')}</select></td>
   ${['hpd','quotaOverride'].map(f=>`<td><input type="number" step="0.25" value="${esc(e[f])}" data-ek="${k}" data-f="${f}"></td>`).join('')}
   <td><button class="btn ghost small" data-act="delemp" data-k="${k}">מחיקה</button></td></tr>`}).join('')}</tbody></table></div>`:'<p class="empty">אין עובדים עדיין. הם יתווספו אחרי העלאת דוחות.</p>'}</div>`;
 }
@@ -591,11 +638,13 @@ view.addEventListener('change',e=>{
     else if(d.f==='map')ty.map[d.b]=t.value===IGNORE?null:t.value;
     else ty[d.f]=t.checked;
     save();return}
+  if(d.fr){const [n,dd]=d.fr.split('|');S.fri[n]=S.fri[n]||{};S.fri[n][dd]=Object.assign(S.fri[n][dd]||{},{[d.f]:t.value});save();FROPEN=true;render();return}
   if(d.ek){S.employees[d.ek][d.f]=t.value;save();return}
   if(d.ai!=null){S.abs[+d.ai][d.f]=t.value;save();return}
 });
 view.addEventListener('click',async e=>{
   const rmp=e.target.closest('[data-rmp]');if(rmp){PREV.splice(+rmp.dataset.rmp,1);render();return}
+  const sm=e.target.closest('#frsum');if(sm){FROPEN=!sm.parentElement.open;return}
   const rm=e.target.closest('[data-rm]');if(rm){REPORTS.splice(+rm.dataset.rm,1);render();return}
   if(e.target.id==='dl'){download();return}
   const b=e.target.closest('[data-act]');if(!b)return;
@@ -659,7 +708,7 @@ async function download(){
   dl.save({filename:fname,data:new Blob([buf])}).then(()=>toast('הקובץ נשמר')).catch(err=>{if(err&&err.code!=='declined')toast('השמירה נכשלה')});
 }
 
-window.__test={importEmps:(b)=>{const n=importEmps(b);return[n,JSON.stringify(S.employees)]},setPrev:(r)=>{PREV=r},outRow,render:()=>render(),setReports:(r)=>{REPORTS=r},holidayName,autoType,parseReport,compute:()=>compute()};
+window.__test={getS:()=>S,importEmps:(b)=>{const n=importEmps(b);return[n,JSON.stringify(S.employees)]},setPrev:(r)=>{PREV=r},outRow,render:()=>render(),setReports:(r)=>{REPORTS=r},holidayName,autoType,parseReport,compute:()=>compute()};
 render();
 })();
 </script>
